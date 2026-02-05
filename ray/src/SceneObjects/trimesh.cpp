@@ -80,10 +80,6 @@ bool TrimeshFace::intersect(ray &r, isect &i) const {
 // and put the parameter in t and the barycentric coordinates of the
 // intersection in u (alpha) and v (beta).
 bool TrimeshFace::intersectLocal(ray &r, isect &i) const {
-  // YOUR CODE HERE
-  //
-  // FIXME: Add ray-trimesh intersection
-
   /* To determine the color of an intersection, use the following rules:
      - If the parent mesh has non-empty `uvCoords`, barycentrically interpolate
        the UV coordinates of the three vertices of the face, then assign it to
@@ -96,8 +92,62 @@ bool TrimeshFace::intersectLocal(ray &r, isect &i) const {
      - If neither is true, assign the parent's material to the intersection.
   */
 
+  const glm::dvec3 &v0 = parent->vertices[ids[0]];
+  const glm::dvec3 &v1 = parent->vertices[ids[1]];
+  const glm::dvec3 &v2 = parent->vertices[ids[2]];
+
+  glm::dvec3 edge1 = v1 - v0;
+  glm::dvec3 edge2 = v2 - v0;
+
+  glm::dvec3 pvec = glm::cross(r.getDirection(), edge2);
+  double det = glm::dot(edge1, pvec);
+
+  if (std::abs(det) < 1e-8) return false;
+
+  double invDet = 1.0 / det;
+
+  glm::dvec3 tvec = r.getPosition() - v0;
+  double u = glm::dot(tvec, pvec) * invDet;
+
+  if (u < 0.0 || u > 1.0) return false;
+
+  glm::dvec3 qvec = glm::cross(tvec, edge1);
+  double v = glm::dot(r.getDirection(), qvec) * invDet;
+
+  if (v < 0.0 || u + v > 1.0) return false;
+
+  double t = glm::dot(edge2, qvec) * invDet;
+
+  if (t < 1e-7) return false;
+
   i.setObject(this->parent);
-  return false;
+  i.setT(t);
+  
+  double w = 1.0 - u - v;
+  i.setBary(u, v, w);
+
+  if (parent->vertNorms) {
+      const glm::dvec3 &n0 = parent->normals[ids[0]];
+      const glm::dvec3 &n1 = parent->normals[ids[1]];
+      const glm::dvec3 &n2 = parent->normals[ids[2]];
+      
+      glm::dvec3 interpNormal = (w * n0) + (u * n1) + (v * n2);
+      i.setN(glm::normalize(interpNormal));
+  } else {
+      i.setN(this->normal);
+  }
+
+  if (!parent->uvCoords.empty()) {
+      const glm::dvec2 &uv0 = parent->uvCoords[ids[0]];
+      const glm::dvec2 &uv1 = parent->uvCoords[ids[1]];
+      const glm::dvec2 &uv2 = parent->uvCoords[ids[2]];
+      
+      i.setUVCoordinates((w * uv0) + (u * uv1) + (v * uv2));
+  }
+
+  i.setMaterial(parent->getMaterial());
+
+  return true;
 }
 
 // Once all the verts and faces are loaded, per vertex normals can be

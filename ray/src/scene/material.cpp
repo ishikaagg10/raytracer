@@ -16,8 +16,6 @@ Material::~Material() {}
 // Apply the phong model to this point on the surface of the object, returning
 // the color of that point.
 glm::dvec3 Material::shade(Scene *scene, const ray &r, const isect &i) const {
-  // YOUR CODE HERE
-
   // For now, this method just returns the diffuse color of the object.
   // This gives a single matte color for every distinct surface in the
   // scene, and that's it.  Simple, but enough to get you started.
@@ -42,7 +40,37 @@ glm::dvec3 Material::shade(Scene *scene, const ray &r, const isect &i) const {
   // 		.
   // 		.
   // }
-  return kd(i);
+  
+  glm::dvec3 P = r.at(i.getT()); 
+  glm::dvec3 N = glm::normalize(i.getN());
+  glm::dvec3 V = glm::normalize(-r.getDirection());
+
+  glm::dvec3 totalColor = ke(i) + ka(i) * scene->ambient();
+
+  for ( const auto& pLight : scene->getAllLights() ) {
+      glm::dvec3 L = pLight->getDirection(P);
+      glm::dvec3 L_norm = glm::normalize(L);
+
+      double nDotL = std::max(0.0, glm::dot(N, L_norm));
+      glm::dvec3 diffuseTerm = kd(i) * nDotL;
+
+      glm::dvec3 specularTerm(0.0, 0.0, 0.0);
+      
+      if (nDotL > 0.0) {
+          glm::dvec3 R = glm::normalize(glm::reflect(-L_norm, N));
+          
+          double rDotV = std::max(0.0, glm::dot(R, V));
+          double specFactor = pow(rDotV, shininess(i));
+          specularTerm = ks(i) * specFactor;
+      }
+
+      glm::dvec3 lightIntensity = pLight->getColor();
+      double distAtten = pLight->distanceAttenuation(P);
+      glm::dvec3 shadowAtten = pLight->shadowAttenuation(r, P);
+      totalColor += shadowAtten * distAtten * lightIntensity * (diffuseTerm + specularTerm);
+  }
+
+  return totalColor;
 }
 
 TextureMap::TextureMap(string filename) {

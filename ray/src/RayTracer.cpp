@@ -56,12 +56,23 @@ glm::dvec3 RayTracer::tracePixel(int i, int j) {
   if (!sceneLoaded())
     return col;
 
-  double x = double(i) / double(buffer_width);
-  double y = double(j) / double(buffer_height);
+  int numSamples = samples;
+
+  for (int p = 0; p < numSamples; ++p) {
+      for (int q = 0; q < numSamples; ++q) {
+          double xOffset = (double(p) + 0.5) / double(numSamples);
+          double yOffset = (double(q) + 0.5) / double(numSamples);
+
+          double x = (double(i) + xOffset) / double(buffer_width);
+          double y = (double(j) + yOffset) / double(buffer_height);
+
+          col += trace(x, y);
+      }
+  }
+
+  col /= double(numSamples * numSamples);
 
   unsigned char *pixel = buffer.data() + (i + j * buffer_width) * 3;
-  col = trace(x, y);
-
   pixel[0] = (int)(255.0 * col[0]);
   pixel[1] = (int)(255.0 * col[1]);
   pixel[2] = (int)(255.0 * col[2]);
@@ -93,6 +104,59 @@ glm::dvec3 RayTracer::traceRay(ray &r, const glm::dvec3 &thresh, int depth,
 
     const Material &m = i.getMaterial();
     colorC = m.shade(scene.get(), r, i);
+
+    // reflection
+    if (depth > 0 && glm::length(m.kr(i)) > 0) {
+      glm::dvec3 N = glm::normalize(i.getN());
+      glm::dvec3 V = r.getDirection(); 
+      glm::dvec3 R = glm::reflect(V, N);
+
+      glm::dvec3 P = r.at(i.getT());
+      
+      ray reflectedRay(P + (N * 0.0001), R, glm::dvec3(1.0, 1.0, 1.0), ray::REFLECTION);
+
+      double dummyT;
+      glm::dvec3 reflectedColor = traceRay(reflectedRay, thresh, depth - 1, dummyT);
+
+      colorC += m.kr(i) * reflectedColor;
+    }
+
+    // refraction
+    if (depth > 0 && glm::length(m.kt(i)) > 0) {
+
+        glm::dvec3 N = glm::normalize(i.getN());
+        glm::dvec3 V = glm::normalize(r.getDirection());
+
+        double eta;
+        double nDotV = glm::dot(N, V);
+        glm::dvec3 effectiveN;
+
+        if (nDotV < 0) {
+            eta = 1.0 / m.index(i); 
+            effectiveN = N;
+            nDotV = -nDotV;
+        }
+        else {
+            eta = m.index(i) / 1.0;
+            effectiveN = -N;
+        }
+
+        double discriminant = 1.0 - (eta * eta) * (1.0 - nDotV * nDotV);
+
+        if (discriminant >= 0.0) {
+            double cosThetaT = sqrt(discriminant);
+
+            glm::dvec3 T = eta * V + (eta * nDotV - cosThetaT) * effectiveN;
+
+            glm::dvec3 P = r.at(i.getT());
+            ray refractedRay(P + (T * 0.0001), T, glm::dvec3(1.0, 1.0, 1.0), ray::REFRACTION);
+
+            double dummyT;
+            glm::dvec3 refractedColor = traceRay(refractedRay, thresh, depth - 1, dummyT);
+
+            colorC += m.kt(i) * refractedColor;
+        }
+    }
   } else {
     // No intersection. This ray travels to infinity, so we color
     // it according to the background color, which in this (simple)
@@ -244,6 +308,13 @@ void RayTracer::traceImage(int w, int h) {
   //
   //       An asynchronous traceImage lets the GUI update your results
   //       while rendering.
+
+  // loop through every pixel
+  for (int i = 0; i < w; ++i) {
+      for (int j = 0; j < h; ++j) {
+          tracePixel(i, j);
+      }
+  }
 }
 
 int RayTracer::aaImage() {
