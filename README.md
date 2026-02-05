@@ -1,1 +1,1 @@
-# raytracer
+Names: Ishika Aggarwal and Sri Kesiraju
