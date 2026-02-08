@@ -1,1 +1,3 @@
 Names: Ishika Aggarwal and Sri Kesiraju
+
+Extra Credit: We implemented Anti-aliasing with Jittered Sampling. Instead of using Regular Grid Sampling which involves us firing rays through the exact center, we added a random offset to the ray's position within each grid cell. This allows the image to have high-frequency noise rather than basic "stair-steps", which leads to better visuals in the images.

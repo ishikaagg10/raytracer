@@ -60,8 +60,13 @@ glm::dvec3 RayTracer::tracePixel(int i, int j) {
 
   for (int p = 0; p < numSamples; ++p) {
       for (int q = 0; q < numSamples; ++q) {
-          double xOffset = (double(p) + 0.5) / double(numSamples);
-          double yOffset = (double(q) + 0.5) / double(numSamples);
+          // double xOffset = (double(p) + 0.5) / double(numSamples);
+          // double yOffset = (double(q) + 0.5) / double(numSamples);
+          double r1 = double(rand()) / RAND_MAX;
+          double r2 = double(rand()) / RAND_MAX;
+
+          double xOffset = (double(p) + r1) / double(numSamples);
+          double yOffset = (double(q) + r2) / double(numSamples);
 
           double x = (double(i) + xOffset) / double(buffer_width);
           double y = (double(j) + yOffset) / double(buffer_height);
