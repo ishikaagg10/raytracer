@@ -52,23 +52,26 @@ const char *Trimesh::doubleCheck() {
   if (!normals.empty() && normals.size() != vertices.size())
     return "Bad Trimesh: Wrong number of normals.";
 
+  bvh.build(faces);
+  
   return 0;
 }
 
 bool Trimesh::intersectLocal(ray &r, isect &i) const {
-  bool have_one = false;
-  for (auto face : faces) {
-    isect cur;
-    if (face->intersectLocal(r, cur)) {
-      if (!have_one || (cur.getT() < i.getT())) {
-        i = cur;
-        have_one = true;
-      }
-    }
-  }
-  if (!have_one)
-    i.setT(1000.0);
-  return have_one;
+  // bool have_one = false;
+  // for (auto face : faces) {
+  //   isect cur;
+  //   if (face->intersectLocal(r, cur)) {
+  //     if (!have_one || (cur.getT() < i.getT())) {
+  //       i = cur;
+  //       have_one = true;
+  //     }
+  //   }
+  // }
+  // if (!have_one)
+  //   i.setT(1000.0);
+  // return have_one;
+   return bvh.intersect(r, i);
 }
 
 bool TrimeshFace::intersect(ray &r, isect &i) const {
