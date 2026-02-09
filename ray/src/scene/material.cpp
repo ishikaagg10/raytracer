@@ -84,28 +84,47 @@ TextureMap::TextureMap(string filename) {
     throw TextureMapException(error);
   }
 }
-
 glm::dvec3 TextureMap::getMappedValue(const glm::dvec2 &coord) const {
-  // YOUR CODE HERE
-  //
-  // In order to add texture mapping support to the
-  // raytracer, you need to implement this function.
-  // What this function should do is convert from
-  // parametric space which is the unit square
-  // [0, 1] x [0, 1] in 2-space to bitmap coordinates,
-  // and use these to perform bilinear interpolation
-  // of the values.
+    double x = coord[0] * (width - 1);
+    double y = coord[1] * (height - 1);
 
-  return glm::dvec3(1, 1, 1);
+    int x0 = (int)floor(x);
+    int y0 = (int)floor(y);
+
+    int x1 = x0 + 1;
+    int y1 = y0 + 1;
+
+    double dx = x - x0;
+    double dy = y - y0;
+
+    glm::dvec3 c00 = getPixelAt(x0, y0); // Top-Left
+    glm::dvec3 c10 = getPixelAt(x1, y0); // Top-Right
+    glm::dvec3 c01 = getPixelAt(x0, y1); // Bottom-Left
+    glm::dvec3 c11 = getPixelAt(x1, y1); // Bottom-Right
+
+    glm::dvec3 top = c00 * (1.0 - dx) + c10 * dx;
+    glm::dvec3 bottom = c01 * (1.0 - dx) + c11 * dx;
+
+    return top * (1.0 - dy) + bottom * dy;
 }
 
 glm::dvec3 TextureMap::getPixelAt(int x, int y) const {
-  // YOUR CODE HERE
-  //
-  // In order to add texture mapping support to the
-  // raytracer, you need to implement this function.
+    if (x >= width) x = width - 1;
+    if (y >= height) y = height - 1;
+    if (x < 0) x = 0;
+    if (y < 0) y = 0;
 
-  return glm::dvec3(1, 1, 1);
+    int index = (y * width + x) * 3;
+
+    if (index < 0 || index + 2 >= data.size()) {
+        return glm::dvec3(0, 0, 0);
+    }
+
+    double r = data[index] / 255.0;
+    double g = data[index + 1] / 255.0;
+    double b = data[index + 2] / 255.0;
+
+    return glm::dvec3(r, g, b);
 }
 
 glm::dvec3 MaterialParameter::value(const isect &is) const {
