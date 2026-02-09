@@ -25,41 +25,35 @@ bool BoundingBox::intersects(const glm::dvec3 &point) const {
 }
 
 bool BoundingBox::intersect(const ray &r, double &tMin, double &tMax) const {
-  /*
-   * Kay/Kajiya algorithm.
-   */
-  glm::dvec3 R0 = r.getPosition();
-  glm::dvec3 Rd = r.getDirection();
-  tMin = -1.0e308; // 1.0e308 is close to infinity... close enough
-                   // for us!
-  tMax = 1.0e308;
-  double ttemp;
+    if (bEmpty) return false;
 
-  for (int currentaxis = 0; currentaxis < 3; currentaxis++) {
-    double vd = Rd[currentaxis];
-    // if the ray is parallel to the face's plane (=0.0)
-    if (vd == 0.0)
-      continue;
-    double v1 = bmin[currentaxis] - R0[currentaxis];
-    double v2 = bmax[currentaxis] - R0[currentaxis];
-    // two slab intersections
-    double t1 = v1 / vd;
-    double t2 = v2 / vd;
-    if (t1 > t2) { // swap t1 & t2
-      ttemp = t1;
-      t1 = t2;
-      t2 = ttemp;
+    glm::dvec3 R0 = r.getPosition();
+    glm::dvec3 Rd = r.getDirection();
+
+    double t0 = 0.0;     
+    double t1 = 1.0e308;
+
+    for (int i = 0; i < 3; ++i) {
+        double invD = 1.0 / Rd[i];
+        double tNear = (bmin[i] - R0[i]) * invD;
+        double tFar = (bmax[i] - R0[i]) * invD;
+
+        if (std::isnan(tNear) || std::isnan(tFar)) {
+             if (R0[i] < bmin[i] || R0[i] > bmax[i]) return false;
+             continue;
+        }
+
+        if (tNear > tFar) std::swap(tNear, tFar);
+
+        if (tNear > t0) t0 = tNear;
+        if (tFar < t1)  t1 = tFar;
+
+        if (t0 > t1) return false;
     }
-    if (t1 > tMin)
-      tMin = t1;
-    if (t2 < tMax)
-      tMax = t2;
-    if (tMin > tMax)
-      return false; // box is missed
-    if (tMax < RAY_EPSILON)
-      return false; // box is behind ray
-  }
-  return true; // it made it past all 3 axes.
+
+    tMin = t0;
+    tMax = t1;
+    return true;
 }
 
 double BoundingBox::area() {

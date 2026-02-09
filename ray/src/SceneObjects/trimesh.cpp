@@ -83,18 +83,6 @@ bool TrimeshFace::intersect(ray &r, isect &i) const {
 // and put the parameter in t and the barycentric coordinates of the
 // intersection in u (alpha) and v (beta).
 bool TrimeshFace::intersectLocal(ray &r, isect &i) const {
-  /* To determine the color of an intersection, use the following rules:
-     - If the parent mesh has non-empty `uvCoords`, barycentrically interpolate
-       the UV coordinates of the three vertices of the face, then assign it to
-       the intersection using i.setUVCoordinates().
-     - Otherwise, if the parent mesh has non-empty `vertexColors`,
-       barycentrically interpolate the colors from the three vertices of the
-       face. Create a new material by copying the parent's material, set the
-       diffuse color of this material to the interpolated color, and then 
-       assign this material to the intersection.
-     - If neither is true, assign the parent's material to the intersection.
-  */
-
   const glm::dvec3 &v0 = parent->vertices[ids[0]];
   const glm::dvec3 &v1 = parent->vertices[ids[1]];
   const glm::dvec3 &v2 = parent->vertices[ids[2]];
@@ -133,9 +121,7 @@ bool TrimeshFace::intersectLocal(ray &r, isect &i) const {
       const glm::dvec3 &n0 = parent->normals[ids[0]];
       const glm::dvec3 &n1 = parent->normals[ids[1]];
       const glm::dvec3 &n2 = parent->normals[ids[2]];
-      
-      glm::dvec3 interpNormal = (w * n0) + (u * n1) + (v * n2);
-      i.setN(glm::normalize(interpNormal));
+      i.setN(glm::normalize((w * n0) + (u * n1) + (v * n2)));
   } else {
       i.setN(this->normal);
   }
@@ -144,11 +130,23 @@ bool TrimeshFace::intersectLocal(ray &r, isect &i) const {
       const glm::dvec2 &uv0 = parent->uvCoords[ids[0]];
       const glm::dvec2 &uv1 = parent->uvCoords[ids[1]];
       const glm::dvec2 &uv2 = parent->uvCoords[ids[2]];
-      
       i.setUVCoordinates((w * uv0) + (u * uv1) + (v * uv2));
+      
+      i.setMaterial(parent->getMaterial());
+  } 
+  else if (!parent->vertColors.empty()) {
+      const glm::dvec3 &c0 = parent->vertColors[ids[0]];
+      const glm::dvec3 &c1 = parent->vertColors[ids[1]];
+      const glm::dvec3 &c2 = parent->vertColors[ids[2]];
+      glm::dvec3 interpColor = (w * c0) + (u * c1) + (v * c2);
+      
+      Material m = parent->getMaterial();
+      m.setDiffuse(interpColor);
+      i.setMaterial(m);
+  } 
+  else {
+      i.setMaterial(parent->getMaterial());
   }
-
-  i.setMaterial(parent->getMaterial());
 
   return true;
 }
