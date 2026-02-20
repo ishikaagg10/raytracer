@@ -36,5 +36,12 @@ bool Sphere::intersectLocal(ray &r, isect &i) const {
     i.setN(glm::normalize(r.at(t2)));
   }
 
+  glm::dvec3 normal = i.getN();
+  
+  double u_coord = 0.5 + atan2(normal[2], normal[0]) / (2.0 * M_PI);
+  double v_coord = 0.5 + asin(normal[1]) / M_PI;
+  
+  i.setUVCoordinates(glm::dvec2(u_coord, v_coord));
+
   return true;
 }
