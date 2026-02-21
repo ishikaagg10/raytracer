@@ -20,6 +20,7 @@
 #include "camera.h"
 #include "material.h"
 #include "ray.h"
+#include "kdTree.h"
 
 #include <glm/geometric.hpp>
 #include <glm/mat3x3.hpp>
@@ -214,6 +215,9 @@ private:
   std::vector<Geometry *> objects;
   std::vector<Light *> lights;
   Camera camera;
+
+  mutable SceneBVH bvh;
+  mutable bool bvhBuilt = false;
 
   // This is the total amount of ambient light in the scene
   // (used as the I_a in the Phong shading model)

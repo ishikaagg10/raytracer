@@ -7,6 +7,7 @@
 #include <glm/gtx/extended_min_max.hpp>
 #include <glm/gtx/io.hpp>
 #include <iostream>
+#include <algorithm>
 
 using namespace std;
 
@@ -108,28 +109,107 @@ void Scene::add(Geometry *obj) {
 
 void Scene::add(Light *light) { lights.emplace_back(light); }
 
+void SceneBVH::build(const std::vector<Geometry*>& objects) {
+    delete root;
+    std::vector<Geometry*> copy = objects;
+    root = buildRecursive(copy, 0);
+}
+
+SceneBVHNode* SceneBVH::buildRecursive(std::vector<Geometry*>& objects, int depth) {
+    SceneBVHNode* node = new SceneBVHNode();
+    
+    for (auto obj : objects) {
+        if (obj->hasBoundingBoxCapability()) {
+            node->bounds.merge(obj->getBoundingBox());
+        }
+    }
+
+    if (objects.size() <= 4 || depth > 20) {
+        node->objects = objects;
+        return node;
+    }
+
+    glm::dvec3 ext = node->bounds.getMax() - node->bounds.getMin();
+    int axis = 0;
+    if (ext.y > ext.x && ext.y > ext.z) axis = 1;
+    else if (ext.z > ext.x && ext.z > ext.y) axis = 2;
+
+    std::sort(objects.begin(), objects.end(), [axis](Geometry* a, Geometry* b) {
+        double aMin = a->hasBoundingBoxCapability() ? a->getBoundingBox().getMin()[axis] : 0.0;
+        double bMin = b->hasBoundingBoxCapability() ? b->getBoundingBox().getMin()[axis] : 0.0;
+        return aMin < bMin;
+    });
+
+    size_t mid = objects.size() / 2;
+    std::vector<Geometry*> leftObjs(objects.begin(), objects.begin() + mid);
+    std::vector<Geometry*> rightObjs(objects.begin() + mid, objects.end());
+
+    node->left = buildRecursive(leftObjs, depth + 1);
+    node->right = buildRecursive(rightObjs, depth + 1);
+
+    return node;
+}
+
+bool SceneBVH::intersect(ray& r, isect& i) const {
+    if (!root) return false;
+    return intersectNode(root, r, i);
+}
+
+bool SceneBVH::intersectNode(SceneBVHNode* node, ray& r, isect& i) const {
+    double tmin, tmax;
+    if (!node->bounds.intersect(r, tmin, tmax)) return false;
+
+    bool hit = false;
+
+    if (node->isLeaf()) {
+        for (auto obj : node->objects) {
+            isect cur;
+            if (obj->intersect(r, cur)) {
+                if (!hit || cur.getT() < i.getT()) {
+                    i = cur;
+                    hit = true;
+                }
+            }
+        }
+        return hit;
+    }
+
+    isect leftI, rightI;
+    bool hitLeft = node->left && intersectNode(node->left, r, leftI);
+    bool hitRight = node->right && intersectNode(node->right, r, rightI);
+
+    if (hitLeft && hitRight) {
+        i = (leftI.getT() < rightI.getT()) ? leftI : rightI;
+        return true;
+    } else if (hitLeft) {
+        i = leftI;
+        return true;
+    } else if (hitRight) {
+        i = rightI;
+        return true;
+    }
+
+    return false;
+}
 
 // Get any intersection with an object.  Return information about the
 // intersection through the reference parameter.
 bool Scene::intersect(ray &r, isect &i) const {
-  double tmin = 0.0;
-  double tmax = 0.0;
-  bool have_one = false;
-  for (const auto &obj : objects) {
-    isect cur;
-    if (obj->intersect(r, cur)) {
-      if (!have_one || (cur.getT() < i.getT())) {
-        i = cur;
-        have_one = true;
-      }
-    }
+  if (!bvhBuilt) {
+      bvh.build(objects);
+      bvhBuilt = true;
   }
-  if (!have_one)
+
+  bool have_one = bvh.intersect(r, i);
+  
+  if (!have_one) {
     i.setT(1000.0);
-  // if debugging,
+  }
+  
   if (TraceUI::m_debug) {
     addToIntersectCache(std::make_pair(new ray(r), new isect(i)));
   }
+  
   return have_one;
 }
 
