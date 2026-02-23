@@ -51,27 +51,37 @@ glm::dvec3 RayTracer::tracePixel(int i, int j) {
 
   int numSamples = samples;
 
-  for (int p = 0; p < numSamples; ++p) {
-      for (int q = 0; q < numSamples; ++q) {
-          double r1 = double(rand()) / RAND_MAX;
-          double r2 = double(rand()) / RAND_MAX;
+  if (numSamples <= 1) {
+      // anti-aliasing off
+      double x = (double(i) + 0.5) / double(buffer_width);
+      double y = (double(j) + 0.5) / double(buffer_height);
+      col = trace(x, y);
+      
+  } else {
+      // anti-aliasing on: Stochastic (Jittered) Supersampling
+      for (int p = 0; p < numSamples; ++p) {
+          for (int q = 0; q < numSamples; ++q) {
+              double r1 = double(rand()) / RAND_MAX;
+              double r2 = double(rand()) / RAND_MAX;
 
-          double xOffset = (double(p) + r1) / double(numSamples);
-          double yOffset = (double(q) + r2) / double(numSamples);
+              double xOffset = (double(p) + r1) / double(numSamples);
+              double yOffset = (double(q) + r2) / double(numSamples);
 
-          double x = (double(i) + xOffset) / double(buffer_width);
-          double y = (double(j) + yOffset) / double(buffer_height);
+              double x = (double(i) + xOffset) / double(buffer_width);
+              double y = (double(j) + yOffset) / double(buffer_height);
 
-          col += trace(x, y);
+              col += trace(x, y);
+          }
       }
-  }
 
-  col /= double(numSamples * numSamples);
+      col /= double(numSamples * numSamples);
+  }
 
   unsigned char *pixel = buffer.data() + (i + j * buffer_width) * 3;
   pixel[0] = (int)(255.0 * col[0]);
   pixel[1] = (int)(255.0 * col[1]);
   pixel[2] = (int)(255.0 * col[2]);
+  
   return col;
 }
 
