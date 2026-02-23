@@ -94,16 +94,17 @@ MaterialParameter parseMaterialParameter(const json &j, ParseData &pd) {
 }
 
 Material parseMaterial(const json &j, ParseData &pd) {
-  // Base new material off of "current" (top-level) material
   Material m = pd.cur_mat;
   IGNORE_MISSING(m.setAmbient(parseMaterialParameter(j.at("ambient"), pd)));
   IGNORE_MISSING(m.setDiffuse(parseMaterialParameter(j.at("diffuse"), pd)));
   IGNORE_MISSING(m.setSpecular(parseMaterialParameter(j.at("specular"), pd)));
-  IGNORE_MISSING(
-      m.setReflective(parseMaterialParameter(j.at("reflective"), pd)));
-  IGNORE_MISSING(
-      m.setTransmissive(parseMaterialParameter(j.at("transmissive"), pd)));
+  IGNORE_MISSING(m.setReflective(parseMaterialParameter(j.at("reflective"), pd)));
+  IGNORE_MISSING(m.setTransmissive(parseMaterialParameter(j.at("transmissive"), pd)));
   IGNORE_MISSING(m.setEmissive(parseMaterialParameter(j.at("emissive"), pd)));
+  
+  // ADDED FOR NORMAL MAPPING
+  IGNORE_MISSING(m.setNormalMap(parseMaterialParameter(j.at("bump"), pd)));
+
   IGNORE_MISSING(m.setShininess(j.at("shininess").get<double>()));
   IGNORE_MISSING(m.setIndex(j.at("index").get<double>()));
   return m;

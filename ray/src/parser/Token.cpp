@@ -154,6 +154,7 @@ SYMBOL lookupReservedWord(const string &ident) {
     reservedWords["transform"] = TRANSFORM;
     reservedWords["translate"] = TRANSLATE;
     reservedWords["transmissive"] = TRANSMISSIVE;
+    reservedWords["bump"] = BUMP;
     reservedWords["trimesh"] = TRIMESH;
     reservedWords["true"] = SYMTRUE;
     reservedWords["updir"] = UPDIR;

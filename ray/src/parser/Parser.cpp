@@ -943,6 +943,9 @@ Material *Parser::parseMaterial(Scene *scene, const Material &parent) {
       mat->setTransmissive(parseVec3dMaterialParameter(scene));
       break;
 
+    case BUMP: 
+      mat->setNormalMap(parseVec3dMaterialParameter(scene));
+      break;
     case INDEX:
       mat->setIndex(parseScalarMaterialParameter(scene));
       break;
