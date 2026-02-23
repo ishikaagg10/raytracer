@@ -98,6 +98,9 @@ glm::dvec3 RayTracer::tracePixel(int i, int j) {
 // ─────────────────────────────────────────────────────────────────────────────
 glm::dvec3 RayTracer::traceRay(ray &r, const glm::dvec3 &thresh, int depth,
                                double &t) {
+    if (glm::max(thresh.r, glm::max(thresh.g, thresh.b)) < traceUI->getThreshold()) {
+      return glm::dvec3(0.0, 0.0, 0.0);
+  }
   isect i;
   glm::dvec3 colorC;
 #if VERBOSE
@@ -170,6 +173,8 @@ glm::dvec3 RayTracer::traceRay(ray &r, const glm::dvec3 &thresh, int depth,
 
     // ── Reflection ────────────────────────────────────────────────────────────
     if (depth > 0 && glm::length(m.kr(i)) > 0) {
+      // Calculate new threshold: current threshold * reflection coefficient
+      glm::dvec3 nextThresh = thresh * m.kr(i);
       glm::dvec3 N = glm::normalize(i.getN());
       glm::dvec3 V = glm::normalize(r.getDirection());
       glm::dvec3 R = glm::normalize(glm::reflect(V, N));
@@ -179,11 +184,14 @@ glm::dvec3 RayTracer::traceRay(ray &r, const glm::dvec3 &thresh, int depth,
       ray reflectedRay(P + offsetN * 0.0001, R, glm::dvec3(1.0), ray::REFLECTION);
 
       double dummyT;
-      colorC += m.kr(i) * traceRay(reflectedRay, thresh, depth - 1, dummyT);
+      // colorC += m.kr(i) * traceRay(reflectedRay, thresh, depth - 1, dummyT);
+      colorC += m.kr(i) * traceRay(reflectedRay, nextThresh, depth - 1, dummyT);
     }
 
     // ── Refraction ────────────────────────────────────────────────────────────
     if (depth > 0 && glm::length(m.kt(i)) > 0) {
+      // Calculate new threshold: current threshold * transmission coefficient
+      glm::dvec3 nextThresh = thresh * m.kt(i);
       glm::dvec3 N = glm::normalize(i.getN());
       glm::dvec3 V = glm::normalize(r.getDirection());
 
@@ -210,14 +218,15 @@ glm::dvec3 RayTracer::traceRay(ray &r, const glm::dvec3 &thresh, int depth,
         ray refractedRay(P + T * 0.0001, T, glm::dvec3(1.0), ray::REFRACTION);
 
         double dummyT;
-        colorC += m.kt(i) * traceRay(refractedRay, thresh, depth - 1, dummyT);
+        colorC += m.kt(i) * traceRay(refractedRay, nextThresh, depth - 1, dummyT);
       } else {
         // Total internal reflection
         glm::dvec3 R = glm::normalize(glm::reflect(V, effectiveN));
         ray reflectedRay(P + R * 0.0001, R, glm::dvec3(1.0), ray::REFLECTION);
 
         double dummyT;
-        colorC += m.kt(i) * traceRay(reflectedRay, thresh, depth - 1, dummyT);
+        // colorC += m.kt(i) * traceRay(reflectedRay, thresh, depth - 1, dummyT);
+        colorC += m.kt(i) * traceRay(reflectedRay, nextThresh, depth - 1, dummyT);
       }
     }
 
