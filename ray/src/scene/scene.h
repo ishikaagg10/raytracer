@@ -33,6 +33,7 @@ using std::unique_ptr;
 
 class Light;
 class Scene;
+class Portal;  // forward declaration
 
 template <typename Obj> class KdTree;
 
@@ -172,6 +173,15 @@ public:
   void add(Geometry *obj);
   void add(Light *light);
 
+  // Portal management ────────────────────────────────────────────────────────
+  // Add a portal to the scene.  Portals are also added to the normal objects
+  // list so that the BVH picks them up for intersection, but they are stored
+  // separately as well so RayTracer can identify portal hits quickly.
+  void addPortal(Portal *portal);
+
+  // Returns a raw pointer list of all portals (non-owning).
+  const std::vector<Portal*>& getAllPortals() const { return portals; }
+
   bool intersect(ray &r, isect &i) const;
 
   auto beginLights() const { return lights.begin(); }
@@ -214,6 +224,7 @@ private:
   */
   std::vector<Geometry *> objects;
   std::vector<Light *> lights;
+  std::vector<Portal *> portals;   // non-owning view into objects
   Camera camera;
 
   mutable SceneBVH bvh;

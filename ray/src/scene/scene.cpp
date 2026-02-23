@@ -4,6 +4,7 @@
 #include "kdTree.h"
 #include "light.h"
 #include "scene.h"
+#include "../portal.h"   // ← portal support
 #include <glm/gtx/extended_min_max.hpp>
 #include <glm/gtx/io.hpp>
 #include <iostream>
@@ -99,6 +100,7 @@ Scene::~Scene() {
     delete obj;
   for (auto &light : lights)
     delete light;
+  // Note: portals vector holds raw pointers into objects, already deleted above
 }
 
 void Scene::add(Geometry *obj) {
@@ -108,6 +110,18 @@ void Scene::add(Geometry *obj) {
 }
 
 void Scene::add(Light *light) { lights.emplace_back(light); }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Portal support
+// ──────────────────────────────────────────────────────────────────────────────
+void Scene::addPortal(Portal *portal) {
+  portals.push_back(portal);   // keep a typed reference
+  add(portal);                 // add to the normal objects list (BVH, etc.)
+  // Force BVH rebuild on next intersect() call
+  bvhBuilt = false;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 
 void SceneBVH::build(const std::vector<Geometry*>& objects) {
     delete root;

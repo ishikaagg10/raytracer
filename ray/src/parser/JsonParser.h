@@ -37,17 +37,15 @@ using json = nlohmann::json;
 #include "../SceneObjects/trimesh.h"
 #include "../scene/light.h"
 #include "../scene/scene.h"
+#include "../portal.h"   // ← Portal support
 
 typedef std::map<string, Material> mmap;
 
-/* While parsing, we need to track certain data, such as the current
-scene, the directory of the scene file (for loading textures + cubemaps),
-the stack of transforms that is currently active, and the last material
-specified at the top-level of the file (which overrides material defaults
-for all objects that come after it). Since this data is only needed while
-parsing and not afterwards, we store it in a struct which is threaded
-through all parsing functions by reference. This does preclude
-multithreaded parsing, but the file format inherently puts a cap on that. */
+/* Because the Scene manages Lights and Geometry lifetimes (calling delete when
+the Scene is dropped), we allocate our lights as raw pointers with new and
+pass those pointers into the Scene. AmbientLight is weird because it's not
+actually a light (see comments in scene.h for details) */
+
 struct ParseData {
   Material cur_mat;
   std::vector<glm::dmat4> transformStack;
@@ -61,26 +59,38 @@ Camera parseCamera(const json &j);
 MaterialParameter parseMaterialParameter(const json &j, ParseData &pd);
 Material parseMaterial(const json &j, ParseData &pd);
 
-/* Because the Scene manages Lights and Geometry lifetimes (calling delete when
-the Scene is dropped), we allocate our lights as raw pointers with new and
-pass those pointers into the Scene. AmbientLight is weird because it's not
-actually a light (see comments in scene.h for details) */
-
-DirectionalLight *parseDirectionalLight(const json &j);
-PointLight *parsePointLight(const json &j);
+DirectionalLight *parseDirectionalLight(const json &j, ParseData &pd);
+PointLight *parsePointLight(const json &j, ParseData &pd);
 glm::dvec3 parseAmbientLight(const json &j);
 
-Sphere *parseSphereBody(const json &j, ParseData &pd);
-Box *parseBoxBody(const json &j, ParseData &pd);
-Square *parseSquareBody(const json &j, ParseData &pd);
-Cylinder *parseCylinderBody(const json &j, ParseData &pd);
-Cone *parseConeBody(const json &j, ParseData &pd);
-Trimesh *parseTrimeshBody(const json &j, ParseData &pd);
-std::vector<Trimesh *> parseObjmeshBody(const json &j, ParseData &pd);
+Sphere    *parseSphereBody(const json &j, ParseData &pd);
+Box       *parseBoxBody(const json &j, ParseData &pd);
+Square    *parseSquareBody(const json &j, ParseData &pd);
+Cylinder  *parseCylinderBody(const json &j, ParseData &pd);
+Cone      *parseConeBody(const json &j, ParseData &pd);
+Trimesh   *parseTrimeshBody(const json &j, ParseData &pd);
+std::vector<Trimesh *>  parseObjmeshBody(const json &j, ParseData &pd);
 std::vector<Geometry *> parseGeometry(const json &j, ParseData &pd);
 
 std::vector<Geometry *> parseTransform(const json &j, ParseData &pd);
 std::vector<Geometry *> parseGeometryOrTransform(const json &j, ParseData &pd);
+
+// ── Portal parsing ────────────────────────────────────────────────────────────
+// Parses a JSON array of portal objects (must be even-length; adjacent pairs
+// are linked).  Each portal entry looks like:
+//
+//   {
+//     "center":   [x, y, z],
+//     "normal":   [x, y, z],
+//     "up":       [x, y, z],   // optional, default [0,1,0]
+//     "radius":   1.0,          // optional, default 1.0
+//     "color":    [r, g, b],   // optional, portal interior tint
+//     "rimColor": [r, g, b]    // optional, rim ring color
+//   }
+//
+// The function allocates Portal objects with new, links pairs, and calls
+// scene->addPortal() for each one.
+void parsePortals(const json &portalsArray, ParseData &pd);
 
 class JsonParser {
 public:

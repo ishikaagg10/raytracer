@@ -36,14 +36,14 @@ default values without having to check if the key exists first.
 #define GET_MAT_W_CUR(j, pd)                                                   \
   hasKey(j, "material") ? parseMaterial(j.at("material"), pd) : pd.cur_mat;
 
-// Special deserializers for vec3. Must be within the nlohmann namespace.
+// Special deserializers for vec3. Must be within the glm namespace.
 namespace glm {
 static void from_json(const json &j, glm::dvec3 &vec) {
   vec.x = j.at(0).get<double>();
   vec.y = j.at(1).get<double>();
   vec.z = j.at(2).get<double>();
 }
-} // namespace nlohmann
+} // namespace glm
 
 bool hasKey(const json &obj, const std::string &key) {
   return obj.find(key) != obj.end();
@@ -101,8 +101,8 @@ Material parseMaterial(const json &j, ParseData &pd) {
   IGNORE_MISSING(m.setReflective(parseMaterialParameter(j.at("reflective"), pd)));
   IGNORE_MISSING(m.setTransmissive(parseMaterialParameter(j.at("transmissive"), pd)));
   IGNORE_MISSING(m.setEmissive(parseMaterialParameter(j.at("emissive"), pd)));
-  
-  // ADDED FOR NORMAL MAPPING
+
+  // Normal mapping
   IGNORE_MISSING(m.setNormalMap(parseMaterialParameter(j.at("bump"), pd)));
 
   IGNORE_MISSING(m.setShininess(j.at("shininess").get<double>()));
@@ -169,7 +169,7 @@ Cone *parseConeBody(const json &j, ParseData &pd) {
   double bottomRadius = 1.0;
   double topRadius = 0.0;
   double height = 1.0;
-  bool capped = true; // Capped by default
+  bool capped = true;
 
   IGNORE_MISSING(j.at("bottom_radius").get_to(bottomRadius));
   IGNORE_MISSING(j.at("top_radius").get_to(topRadius));
@@ -234,8 +234,6 @@ Trimesh *parseTrimeshBody(const json &j, ParseData &pd) {
   if (genNormals) {
     t->generateNormals();
   }
-
-
 
   return t;
 }
@@ -323,8 +321,7 @@ std::vector<Geometry *> parseTransform(const json &j, ParseData &pd) {
     throw ParserException("Unknown transform type: " + key);
   }
 
-  // Recursively process each child element which has this transform
-  // applied.
+  // Recursively process each child element which has this transform applied.
   for (const auto &obj : children) {
     std::string key = obj.begin().key();
     if (isTransformKey(key)) {
@@ -340,6 +337,106 @@ std::vector<Geometry *> parseTransform(const json &j, ParseData &pd) {
   return geoms;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// parsePortals
+//
+// Reads a JSON array of portal descriptors. Adjacent pairs [0,1], [2,3], …
+// are automatically linked to each other. Always provide an even number.
+//
+// Each entry in the array is a plain JSON object (NOT the {key: val} wrapper
+// used by geometry — portals live at the top level under the "portals" key,
+// whose value IS the array directly):
+//
+//   {"portals": [
+//     { "center": [x,y,z], "normal": [x,y,z], ... },   <- portal A
+//     { "center": [x,y,z], "normal": [x,y,z], ... }    <- portal B (linked to A)
+//   ]}
+//
+// ─────────────────────────────────────────────────────────────────────────────
+void parsePortals(const json &portalsArray, ParseData &pd) {
+  if (!portalsArray.is_array()) {
+    throw ParserException("\"portals\" value must be a JSON array");
+  }
+  if (portalsArray.size() % 2 != 0) {
+    throw ParserException(
+        "\"portals\" array must have an even number of entries "
+        "(portals come in linked pairs)");
+  }
+
+  // Build a dummy Material for the portal SceneObject base class.
+  // All visual appearance is driven by portal color / rimColor; this
+  // material just needs to exist so the base class ctor doesn't crash.
+  Material dummyMat;
+  dummyMat.setAmbient(glm::dvec3(0.0));
+  dummyMat.setDiffuse(glm::dvec3(0.0));
+  dummyMat.setEmissive(glm::dvec3(0.0));
+  dummyMat.setShininess(0.0);
+
+  // Default colors (Portal-game inspired: blue & orange)
+  const glm::dvec3 kDefaultColorA    = glm::dvec3(0.2,  0.5,  1.0);
+  const glm::dvec3 kDefaultRimColorA = glm::dvec3(0.05, 0.25, 0.9);
+  const glm::dvec3 kDefaultColorB    = glm::dvec3(1.0,  0.45, 0.1);
+  const glm::dvec3 kDefaultRimColorB = glm::dvec3(0.9,  0.2,  0.0);
+  const glm::dvec3 kDefaultUp        = glm::dvec3(0.0,  1.0,  0.0);
+
+  std::vector<Portal *> created;
+  created.reserve(portalsArray.size());
+
+  for (size_t k = 0; k < portalsArray.size(); ++k) {
+    const json &pj = portalsArray[k];
+
+    // ── Required fields ──────────────────────────────────────────────────────
+    if (!hasKey(pj, "center")) {
+      throw ParserException("Portal entry " + std::to_string(k) +
+                            " is missing required field \"center\"");
+    }
+    if (!hasKey(pj, "normal")) {
+      throw ParserException("Portal entry " + std::to_string(k) +
+                            " is missing required field \"normal\"");
+    }
+
+    glm::dvec3 center = pj.at("center").get<glm::dvec3>();
+    glm::dvec3 normal = pj.at("normal").get<glm::dvec3>();
+
+    // ── Optional fields with sensible defaults ────────────────────────────────
+    glm::dvec3 up = kDefaultUp;
+    IGNORE_MISSING(up = pj.at("up").get<glm::dvec3>());
+
+    double radius = 1.0;
+    IGNORE_MISSING(radius = pj.at("radius").get<double>());
+
+    // Alternate default colors for first vs. second of each pair so
+    // unlabeled portals are easy to tell apart.
+    bool isSecondOfPair = (k % 2 == 1);
+    glm::dvec3 color    = isSecondOfPair ? kDefaultColorB    : kDefaultColorA;
+    glm::dvec3 rimColor = isSecondOfPair ? kDefaultRimColorB : kDefaultRimColorA;
+
+    IGNORE_MISSING(color    = pj.at("color").get<glm::dvec3>());
+    IGNORE_MISSING(rimColor = pj.at("rimColor").get<glm::dvec3>());
+
+    Portal *portal = new Portal(pd.s, &dummyMat,
+                                center, normal, up,
+                                radius, color, rimColor);
+    created.push_back(portal);
+  }
+
+  // Link adjacent pairs and register them with the scene.
+  for (size_t k = 0; k < created.size(); k += 2) {
+    Portal::link(created[k], created[k + 1]);
+    pd.s->addPortal(created[k]);
+    pd.s->addPortal(created[k + 1]);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// JsonParser::parseScene
+// ─────────────────────────────────────────────────────────────────────────────
+// The scene file is a JSON array of single-key objects, e.g.:
+//   [ {"camera": {...}}, {"point_light": {...}}, {"sphere": {...}}, ... ]
+//
+// Portal entries use the key "portals" and the value is the portal array:
+//   {"portals": [ {...}, {...} ]}
+//
 Scene *JsonParser::parseScene() {
   // Allow comments and exceptions while parsing
   json j = json::parse(this->contents);
@@ -356,8 +453,6 @@ Scene *JsonParser::parseScene() {
     if (key == "camera") {
       scene->getCamera() = parseCamera(val);
     } else if (key == "material") {
-      // Need to reset the top-level material so that we don't
-      // pollute the new material with old values
       pd.cur_mat = Material{};
       pd.cur_mat = parseMaterial(val, pd);
     } else if (key == "ambient_light") {
@@ -366,6 +461,11 @@ Scene *JsonParser::parseScene() {
       scene->add(parseDirectionalLight(val, pd));
     } else if (key == "point_light") {
       scene->add(parsePointLight(val, pd));
+    } else if (key == "portals") {
+      // ── PORTAL SUPPORT ────────────────────────────────────────────────────
+      // val is the array of portal descriptors; parsePortals allocates,
+      // links, and registers them all.
+      parsePortals(val, pd);
     } else if (isTransformKey(key)) {
       auto geoms = parseTransform(object, pd);
       for (auto g : geoms) {
@@ -381,11 +481,13 @@ Scene *JsonParser::parseScene() {
     }
   }
 
-
   return scene;
 }
 
-// Helper function to set parts of a Material from a tinyobj material
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper functions for OBJ loading (unchanged from original)
+// ─────────────────────────────────────────────────────────────────────────────
+
 void MaterialFromTinyObj(Material *target, tinyobj::material_t mat) {
   target->setAmbient(glm::make_vec3(mat.ambient));
   target->setDiffuse(glm::make_vec3(mat.diffuse));
@@ -396,8 +498,6 @@ void MaterialFromTinyObj(Material *target, tinyobj::material_t mat) {
   target->setIndex(mat.ior);
 }
 
-// Cantor hash function. We need at least 64 bits in the computation, since the
-// 32-bit computation potentially overflows when a + b = 2**16 (way too small)
 size_t hash2(uint64_t a, uint64_t b) { return ((a + b) * (a + b + 1) / 2) + b; }
 size_t hash3(uint64_t a, uint64_t b, uint64_t c) {
   return hash2(hash2(a, b), c);
@@ -415,35 +515,16 @@ struct TinyObjIndexEq {
   }
 };
 
-/* The full OBJ file format is chaotic neutral. To try to tame some of this, we
-only support certain features. See jsonformat.md for the limitations.
-*/
 Trimesh *loadObjToTrimesh(const tinyobj::ObjReader &rdr,
                           const tinyobj::shape_t &s, Trimesh *t,
                           ParseData &pd) {
   auto &attrib = rdr.GetAttrib();
   auto &materials = rdr.GetMaterials();
 
-  /* Faces in OBJ files can use different indices for
-     UV/normals/positions. For example, naively you can specify a face as
-     (1, 2, 3), meaning use vertex positions 1/2/3, UV coordinates 1/2/3,
-     etc. However, we can also mix and match, e.g. (1/1/1, 2/2/2, 3/1/1)
-     would use the same vertex positions, but use the first vertex's
-     UV/normal on the third vertex.
-
-     Instead of dealing with this during rendering, we preprocess the OBJ
-     file so that every unique combination of v/vt/vn gets its own index
-     in the Trimesh. This increases memory usage slightly, but most renderers
-     (incl. OpenGL) need separate arrays of indices anyways.
-  */
-
   bool warned = false;
   std::unordered_map<tinyobj::index_t, int, TinyObjIndexHash, TinyObjIndexEq>
       indexMap;
 
-  // If this v/vt/vn combination has been seen before, return the linear
-  // index. Otherwise, create it by inserting the combination into the
-  // mesh.
   auto getOrCreateLinearIndex = [&attrib, &indexMap, &warned,
                                  t](tinyobj::index_t i) {
     if (indexMap.find(i) == indexMap.end()) {
@@ -458,7 +539,6 @@ Trimesh *loadObjToTrimesh(const tinyobj::ObjReader &rdr,
       t->addVertex(glm::make_vec3(&attrib.vertices[3 * i.vertex_index]));
       if (i.normal_index != -1) {
         auto n = glm::make_vec3(&attrib.normals[3 * i.normal_index]);
-        // OBJ normals are not required to be normalized; ours are
         t->addNormal(glm::normalize(n));
       }
 
@@ -472,8 +552,6 @@ Trimesh *loadObjToTrimesh(const tinyobj::ObjReader &rdr,
     return indexMap[i];
   };
 
-  // TinyOBJ triangulates for us, so we don't have to check for larger
-  // faces
   for (long unsigned f = 0; f < s.mesh.indices.size(); f += 3) {
     auto i0 = getOrCreateLinearIndex(s.mesh.indices[f]);
     auto i1 = getOrCreateLinearIndex(s.mesh.indices[f + 1]);
@@ -481,30 +559,6 @@ Trimesh *loadObjToTrimesh(const tinyobj::ObjReader &rdr,
     t->addFace(i0, i1, i2);
   }
 
-  /* Finished parsing geometry, now parse materials. The parser currently
-  only supports a single material per mesh, because to do otherwise
-  would require modification of the Trimesh class itself.
-
-  If you want to support multiple materials, you need to do the following:
-
-       1. Modify the Trimesh class to support multiple materials in an
-          array or vector
-       2. Loop over the `materials` array here and place each material in
-          the materials vector in the Trimesh
-       3. For each face with index f, access s.mesh.material_ids[f] to get
-          the index of the material for that face. Record this
-          information in the Trimesh somehow (perhaps modifying the
-          addFace method)
-       4. When rendering an intersection with a face, look up the
-          corresponding material in the Trimesh, then use that as the
-          material for the intersection phase (including barycentric
-          interpolation of the material if it is called for).
-
-// Face f should render using materials[k]
-auto k = s.mesh.material_ids[f];
-*/
-
-  // Take the first material associated with the mesh and use it.
   Material *m = new Material();
   if (materials.size() > 0) {
     tinyobj::material_t mtl = materials[0];
@@ -552,8 +606,7 @@ std::vector<Trimesh *> parseObjmeshBody(const json &j, ParseData &pd) {
   tinyobj::ObjReaderConfig reader_config;
   reader_config.mtl_search_path = pd.scene_dir.string();
   reader_config.triangulate = true;
-  reader_config.vertex_color = false; // Populate vertex colors only if
-                                      // *all* vertices have associated colors
+  reader_config.vertex_color = false;
   tinyobj::ObjReader reader;
   bool success = reader.ParseFromFile(path, reader_config);
 
@@ -589,8 +642,6 @@ std::vector<Trimesh *> parseObjmeshBody(const json &j, ParseData &pd) {
     if (genNormals) {
       t->generateNormals();
     }
-
-
 
     results.push_back(t);
   }
