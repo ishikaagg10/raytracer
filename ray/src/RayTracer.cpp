@@ -218,7 +218,18 @@ glm::dvec3 RayTracer::traceRay(ray &r, const glm::dvec3 &thresh, int depth,
         ray refractedRay(P + T * 0.0001, T, glm::dvec3(1.0), ray::REFRACTION);
 
         double dummyT;
-        colorC += m.kt(i) * traceRay(refractedRay, nextThresh, depth - 1, dummyT);
+        glm::dvec3 refractedColor = traceRay(refractedRay, nextThresh, depth - 1, dummyT);
+
+    // --- RADIOACTIVE GOOP ADDITION ---
+    // If nDotV > 0, we are EXITING the object, meaning the ray just traveled 
+    // through the internal volume of the goop.
+    if (glm::dot(i.getN(), V) > 0) {
+        // Add emission scaled by distance traveled (dummyT is the distance to the next hit)
+        refractedColor += m.ke(i) * dummyT; 
+    }
+    // ---------------------------------
+
+    colorC += m.kt(i) * refractedColor;
       } else {
         // Total internal reflection
         glm::dvec3 R = glm::normalize(glm::reflect(V, effectiveN));

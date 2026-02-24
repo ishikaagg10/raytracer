@@ -87,7 +87,8 @@ glm::dvec3 PointLight::shadowAttenuation(const ray &r,
 
       attenuation *= m.kt(i);
       glm::dvec3 hitPoint = shadowRay.at(i.getT());
-      distToLight = glm::distance(position, hitPoint);
+      // distToLight = glm::distance(position, hitPoint);
+      distToLight = glm::distance(position, hitPoint + (L * 0.0001)); 
       shadowRay = ray(hitPoint + (L * 0.0001), L, glm::dvec3(1.0, 1.0, 1.0), ray::SHADOW);
   }
 
