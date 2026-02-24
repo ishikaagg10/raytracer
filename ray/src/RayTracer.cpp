@@ -89,9 +89,11 @@ glm::dvec3 RayTracer::tracePixel(int i, int j) {
 
 glm::dvec3 RayTracer::traceRay(ray &r, const glm::dvec3 &thresh, int depth,
                                double &t) {
-    if (glm::max(thresh.r, glm::max(thresh.g, thresh.b)) < traceUI->getThreshold()) {
+  // Adaptive Termination
+  if (glm::max(thresh.r, glm::max(thresh.g, thresh.b)) < traceUI->getThreshold()) {
       return glm::dvec3(0.0, 0.0, 0.0);
   }
+  
   isect i;
   glm::dvec3 colorC;
 #if VERBOSE
@@ -102,6 +104,7 @@ glm::dvec3 RayTracer::traceRay(ray &r, const glm::dvec3 &thresh, int depth,
   Portal::lastHit.portal = nullptr;
 
   if (scene->intersect(r, i)) {
+    // portals
     Portal* hitPortal = nullptr;
     if (Portal::lastHit.portal != nullptr &&
         Portal::lastHit.t == i.getT()) {
@@ -146,21 +149,36 @@ glm::dvec3 RayTracer::traceRay(ray &r, const glm::dvec3 &thresh, int depth,
       }
     }
 
+    // base shading
     const Material &m = i.getMaterial();
     colorC = m.shade(scene.get(), r, i);
 
+    // Fresnel Reflectance (Schlick's Approximation)
+    glm::dvec3 N_base = glm::normalize(i.getN());
+    glm::dvec3 V_base = glm::normalize(r.getDirection());
+    double nDotV_base = glm::dot(N_base, V_base);
+    
+    double R_fresnel = 0.5;
+    if (m.index(i) > 0.0) {
+        double eta_base = (nDotV_base < 0) ? (1.0 / m.index(i)) : (m.index(i) / 1.0);
+        double R0 = pow((1.0 - eta_base) / (1.0 + eta_base), 2.0);
+        double cosTheta = std::abs(nDotV_base);
+        R_fresnel = R0 + (1.0 - R0) * pow(1.0 - cosTheta, 5.0);
+    }
+
+    // reflection
     if (depth > 0 && glm::length(m.kr(i)) > 0) {
       glm::dvec3 nextThresh = thresh * m.kr(i);
       glm::dvec3 N = glm::normalize(i.getN());
       glm::dvec3 V = glm::normalize(r.getDirection());
-      glm::dvec3 R = glm::normalize(glm::reflect(V, N));
+      glm::dvec3 R_dir = glm::normalize(glm::reflect(V, N));
       glm::dvec3 P = r.at(i.getT());
 
       glm::dvec3 offsetN = (glm::dot(N, V) < 0) ? N : -N;
-      ray reflectedRay(P + offsetN * 0.0001, R, glm::dvec3(1.0), ray::REFLECTION);
+      ray reflectedRay(P + offsetN * 0.0001, R_dir, glm::dvec3(1.0), ray::REFLECTION);
 
       double dummyT;
-      colorC += m.kr(i) * traceRay(reflectedRay, nextThresh, depth - 1, dummyT);
+      colorC += m.kr(i) * R_fresnel * traceRay(reflectedRay, nextThresh, depth - 1, dummyT);
     }
 
     // refraction
@@ -194,22 +212,22 @@ glm::dvec3 RayTracer::traceRay(ray &r, const glm::dvec3 &thresh, int depth,
         double dummyT;
         glm::dvec3 refractedColor = traceRay(refractedRay, nextThresh, depth - 1, dummyT);
 
-    // radioactive goop
-    if (glm::dot(i.getN(), V) > 0) {
-        refractedColor += m.ke(i) * dummyT; 
-    }
+        // Radioactive Goop
+        if (glm::dot(i.getN(), V) > 0) {
+            refractedColor += m.ke(i) * dummyT; 
+        }
 
-    colorC += m.kt(i) * refractedColor;
+        colorC += m.kt(i) * (1.0 - R_fresnel) * refractedColor;
       } else {
-        glm::dvec3 R = glm::normalize(glm::reflect(V, effectiveN));
-        ray reflectedRay(P + R * 0.0001, R, glm::dvec3(1.0), ray::REFLECTION);
+        glm::dvec3 R_dir = glm::normalize(glm::reflect(V, effectiveN));
+        ray reflectedRay(P + R_dir * 0.0001, R_dir, glm::dvec3(1.0), ray::REFLECTION);
 
         double dummyT;
         colorC += m.kt(i) * traceRay(reflectedRay, nextThresh, depth - 1, dummyT);
       }
     }
-
   } else {
+    // cube mapping
     if (traceUI->cubeMap()) {
       colorC = traceUI->getCubeMap()->getColor(r);
     } else {

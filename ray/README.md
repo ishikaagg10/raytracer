@@ -1,6 +1,6 @@
 Names: Ishika Aggarwal and Venkata Phani (Sri) Kesiraju
 
-All of the additional scenes that we added can be found in the following folder:
+We tested some of our extra credit implementations using custom scenes. All of these additional scenes that we added can be found in the following folder:
 extra_credit_files/assets/scenes
 
 Milestone 2 Extra Credit:
@@ -15,6 +15,8 @@ Milestone 2 Extra Credit:
 5. Portals: Rays that enter through one side are teleported out of the other side. There is also a bounce limit that prevents infinite loops. This can be tested by rendering a .ray scene that includes portals as the ray tracer will automatically detect it and perform accordingly.
 
 6. Creative Scene: We created a custom scene with a magical landscape that has a textured unicorns and floating clouds. There is also complex lighting with realistic shadows and glossy reflections. We also included a portal and many different types of elements. This can be tested by loading the scene into the GUI or through the command line.
+
+7. More Realistic Shading Model: We implemented Schlick's approximation for Fresnel reflectance on dielectric materials. Depending on the viewing angle, objects like glass can look highly reflective at certain angles and highly transparent when viewed directly. This can be tested by rendering a .ray scene that has a glass object with some recursion depth.
 
 
 Milestone 1:
