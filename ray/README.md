@@ -1,5 +1,20 @@
 Names: Ishika Aggarwal and Venkata Phani (Sri) Kesiraju
 
+Milestone 2 Extra Credit:
+1. Adaptive Termination Criterion: If the accumulated ray weight falls below a certain threshold, the ray tracer stops recursing early to save significant rendering time. This can be tested by adjusting the Threshold slider in the GUI, where a higher threshold will stop the ray tracer sooner, and a Threshold value of 0 will force full recursion.
+
+2. Stochastic (Jittered) Supersampling: Instead of using Regular Grid Sampling which involves us firing rays through the exact center, we added a random offset to the ray's position within each grid cell. This allows the image to have high-frequency noise rather than basic "stair-steps", which leads to better visuals in the images. This can be tested by increasing the Supersamples setting in the GUI.
+
+3. Translucent Emissive Objects ("Radioactive Goop"): The materials can now emit light as rays go through them. It is done along the path length of the ray as it passes through the object by adding the emissive light contribution to the total illumination. This can be tested by rendering a .ray scene that has an object with emissive material as it is automatically handled during refraction.
+
+4. Normal/Bump Mapping: The surface can now have small details and bumps without extra shapes through an additional texture map that is used before the shading is calculated. This can be tested by rendering a .ray scene that includes a material that has a paired texture map and normal map.
+
+5. Portals: Rays that enter through one side are teleported out of the other side. There is also a bounce limit that prevents infinite loops. This can be tested by rendering a .ray scene that includes portals as the ray tracer will automatically detect it and perform accordingly.
+
+6. Creative Scene: We created a custom scene with a magical landscape that has a textured unicorns and floating clouds. There is also complex lighting with realistic shadows and glossy reflections. We also included a portal and many different types of elements. This can be tested by loading the scene into the GUI or through the command line.
+
+
+Milestone 1:
 Extra Credit: We implemented Anti-aliasing with Jittered Sampling. Instead of using Regular Grid Sampling which involves us firing rays through the exact center, we added a random offset to the ray's position within each grid cell. This allows the image to have high-frequency noise rather than basic "stair-steps", which leads to better visuals in the images.
 
 1. Recursive Whitted Style Ray Tracing
