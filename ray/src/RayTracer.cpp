@@ -87,15 +87,6 @@ glm::dvec3 RayTracer::tracePixel(int i, int j) {
 
 #define VERBOSE 0
 
-// ─────────────────────────────────────────────────────────────────────────────
-// traceRay
-// ─────────────────────────────────────────────────────────────────────────────
-// Portal detection: isect has no getObject() accessor so we use the
-// thread_local Portal::lastHit side-channel written by Portal::intersectLocal().
-// Before calling scene->intersect() we reset lastHit.t to -1 so we don't
-// confuse hits from prior rays.  After the call, if lastHit.t matches
-// i.getT() exactly, the closest intersection was a portal.
-// ─────────────────────────────────────────────────────────────────────────────
 glm::dvec3 RayTracer::traceRay(ray &r, const glm::dvec3 &thresh, int depth,
                                double &t) {
     if (glm::max(thresh.r, glm::max(thresh.g, thresh.b)) < traceUI->getThreshold()) {
@@ -107,14 +98,10 @@ glm::dvec3 RayTracer::traceRay(ray &r, const glm::dvec3 &thresh, int depth,
   std::cerr << "== current depth: " << depth << std::endl;
 #endif
 
-  // Reset the portal side-channel before each intersection test.
   Portal::lastHit.t      = -1.0;
   Portal::lastHit.portal = nullptr;
 
   if (scene->intersect(r, i)) {
-
-    // ── Portal hit? ───────────────────────────────────────────────────────────
-    // lastHit is valid AND its t matches the winning isect t → portal hit.
     Portal* hitPortal = nullptr;
     if (Portal::lastHit.portal != nullptr &&
         Portal::lastHit.t == i.getT()) {
@@ -123,10 +110,8 @@ glm::dvec3 RayTracer::traceRay(ray &r, const glm::dvec3 &thresh, int depth,
 
     if (hitPortal && hitPortal->getPartner()) {
 
-      // Per-thread bounce counter to prevent infinite portal loops.
       static thread_local int portalBounces = 0;
 
-      // The material already has rim/interior color baked in by intersectLocal.
       const Material &m = i.getMaterial();
       glm::dvec3 rimContrib = m.shade(scene.get(), r, i);
 
@@ -134,18 +119,15 @@ glm::dvec3 RayTracer::traceRay(ray &r, const glm::dvec3 &thresh, int depth,
         return glm::clamp(rimContrib, 0.0, 1.0);
       }
 
-      // Determine rim vs interior from UV (set by intersectLocal).
       glm::dvec2 uv = i.getUVCoordinates();
       double du = uv.x - 0.5;
       double dv = uv.y - 0.5;
-      double radialFrac = 2.0 * std::sqrt(du * du + dv * dv); // 0=centre,1=rim
+      double radialFrac = 2.0 * std::sqrt(du * du + dv * dv);
 
       if (radialFrac > 0.92) {
-        // Rim ring: just show the rim color, don't teleport.
         return glm::clamp(rimContrib, 0.0, 1.0);
       }
 
-      // Interior: teleport the ray and recurse.
       glm::dvec3 hitPt = r.at(i.getT());
       ray hitRay(hitPt, r.getDirection(), r.getAtten(), r.type());
 
@@ -158,22 +140,16 @@ glm::dvec3 RayTracer::traceRay(ray &r, const glm::dvec3 &thresh, int depth,
         glm::dvec3 portalViewColor = traceRay(teleported, thresh, depth, dummyT);
         portalBounces--;
 
-        // Slight tint from portal color (8 %), rest is the true view.
         glm::dvec3 tint   = hitPortal->getColor();
         glm::dvec3 result = portalViewColor * (0.92 * glm::dvec3(1.0) + 0.08 * tint);
         return glm::clamp(result, 0.0, 1.0);
       }
-
-      // teleportRay returned false (no partner) – fall through to normal shading.
     }
 
-    // ── Normal (non-portal) shading ───────────────────────────────────────────
     const Material &m = i.getMaterial();
     colorC = m.shade(scene.get(), r, i);
 
-    // ── Reflection ────────────────────────────────────────────────────────────
     if (depth > 0 && glm::length(m.kr(i)) > 0) {
-      // Calculate new threshold: current threshold * reflection coefficient
       glm::dvec3 nextThresh = thresh * m.kr(i);
       glm::dvec3 N = glm::normalize(i.getN());
       glm::dvec3 V = glm::normalize(r.getDirection());
@@ -184,13 +160,11 @@ glm::dvec3 RayTracer::traceRay(ray &r, const glm::dvec3 &thresh, int depth,
       ray reflectedRay(P + offsetN * 0.0001, R, glm::dvec3(1.0), ray::REFLECTION);
 
       double dummyT;
-      // colorC += m.kr(i) * traceRay(reflectedRay, thresh, depth - 1, dummyT);
       colorC += m.kr(i) * traceRay(reflectedRay, nextThresh, depth - 1, dummyT);
     }
 
-    // ── Refraction ────────────────────────────────────────────────────────────
+    // refraction
     if (depth > 0 && glm::length(m.kt(i)) > 0) {
-      // Calculate new threshold: current threshold * transmission coefficient
       glm::dvec3 nextThresh = thresh * m.kt(i);
       glm::dvec3 N = glm::normalize(i.getN());
       glm::dvec3 V = glm::normalize(r.getDirection());
@@ -220,29 +194,22 @@ glm::dvec3 RayTracer::traceRay(ray &r, const glm::dvec3 &thresh, int depth,
         double dummyT;
         glm::dvec3 refractedColor = traceRay(refractedRay, nextThresh, depth - 1, dummyT);
 
-    // --- RADIOACTIVE GOOP ADDITION ---
-    // If nDotV > 0, we are EXITING the object, meaning the ray just traveled 
-    // through the internal volume of the goop.
+    // radioactive goop
     if (glm::dot(i.getN(), V) > 0) {
-        // Add emission scaled by distance traveled (dummyT is the distance to the next hit)
         refractedColor += m.ke(i) * dummyT; 
     }
-    // ---------------------------------
 
     colorC += m.kt(i) * refractedColor;
       } else {
-        // Total internal reflection
         glm::dvec3 R = glm::normalize(glm::reflect(V, effectiveN));
         ray reflectedRay(P + R * 0.0001, R, glm::dvec3(1.0), ray::REFLECTION);
 
         double dummyT;
-        // colorC += m.kt(i) * traceRay(reflectedRay, thresh, depth - 1, dummyT);
         colorC += m.kt(i) * traceRay(reflectedRay, nextThresh, depth - 1, dummyT);
       }
     }
 
   } else {
-    // ── No intersection – background / cube map ───────────────────────────────
     if (traceUI->cubeMap()) {
       colorC = traceUI->getCubeMap()->getColor(r);
     } else {

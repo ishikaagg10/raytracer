@@ -19,19 +19,15 @@ glm::dvec3 Material::shade(Scene *scene, const ray &r, const isect &i) const {
   glm::dvec3 P = r.at(i.getT()); 
   glm::dvec3 N = glm::normalize(i.getN());
 
-  // Apply Normal Mapping
+  // Normal Mapping
   if (hasNormalMap()) {
-      // 1. Get color from normal map and remap from [0, 1] to [-1, 1]
       glm::dvec3 mapColor = kn(i);
       glm::dvec3 tangentNormal = glm::normalize(mapColor * 2.0 - 1.0);
 
-      // 2. Build TBN (Tangent, Bitangent, Normal) frame
-      // We use a "stable" up vector to derive a tangent if one isn't provided by the mesh
       glm::dvec3 up = (std::abs(N.z) < 0.9) ? glm::dvec3(0, 0, 1) : glm::dvec3(1, 0, 0);
       glm::dvec3 T = glm::normalize(glm::cross(up, N));
       glm::dvec3 B = glm::cross(N, T);
 
-      // 3. Transform tangent-space normal to world-space
       N = glm::normalize(tangentNormal.x * T + tangentNormal.y * B + tangentNormal.z * N);
   }
 
