@@ -1,5 +1,8 @@
 Names: Ishika Aggarwal and Venkata Phani (Sri) Kesiraju
 
+All of the additional scenes that we added can be found in the following folder:
+extra_credit_files/assets/scenes
+
 Milestone 2 Extra Credit:
 1. Adaptive Termination Criterion: If the accumulated ray weight falls below a certain threshold, the ray tracer stops recursing early to save significant rendering time. This can be tested by adjusting the Threshold slider in the GUI, where a higher threshold will stop the ray tracer sooner, and a Threshold value of 0 will force full recursion.
 
